@@ -1,0 +1,114 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2818
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 import pandas as pd\
+import numpy as np\
+import matplotlib.pyplot as plt\
+import seaborn as sns\
+import shap\
+import logging\
+from sklearn.model_selection import train_test_split\
+from sklearn.preprocessing import StandardScaler\
+from sklearn.ensemble import RandomForestClassifier\
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score\
+from sklearn.utils.class_weight import compute_class_weight\
+from imblearn.over_sampling import SMOTE\
+from skopt import BayesSearchCV\
+from xgboost import XGBClassifier\
+import tensorflow as tf\
+from tensorflow.keras.models import Sequential\
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization\
+\
+# Configure logging\
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')\
+\
+# Load datasets\
+logging.info("Loading datasets...")\
+epi_data = pd.read_excel("/mnt/data/epi20210205.xlsx")\
+gwas_data = pd.read_csv("/mnt/data/gwas-association-downloaded_2025-01-14-MONDO_0005301-withChildTraits.csv")\
+snp_data = pd.read_csv("/mnt/data/pone.0127632.s001.csv")\
+\
+# Step 1: Filtering GWAS Data (Significant SNPs)\
+gwas_data_filtered = gwas_data[gwas_data['pValue'] < 0.05][['SNP', 'riskAllele', 'orValue', 'pValue', 'traitName']]\
+\
+# Step 2: Filtering SNP Data (Strong Associations)\
+snp_data_filtered = snp_data[(snp_data['pValue'] < 0.05) & (snp_data['orValue'] > 1.5)][['SNP', 'riskAllele', 'orValue', 'pValue']]\
+\
+# Step 3: Merging SNP Data with GWAS Data\
+merged_data = pd.merge(gwas_data_filtered, snp_data_filtered, on=['SNP', 'riskAllele'], how='inner', suffixes=('_GWAS', '_SNP'))\
+\
+# Step 4: Integrating with Epigenetic Data\
+epi_data_filtered = epi_data[['Gene', 'Expression_Level']]\
+merged_data = merged_data.merge(epi_data_filtered, left_on='traitName', right_on='Gene', how='left')\
+\
+# Step 5: Feature Engineering\
+merged_data['Risk_Allele_Present'] = 1\
+merged_data['Expression_Label'] = merged_data['Expression_Level'].apply(lambda x: 1 if x == 'Upregulated' else (-1 if x == 'Downregulated' else 0))\
+\
+# Step 6: Final Preprocessed Data\
+drop_columns = ['traitName', 'Gene', 'Expression_Level']\
+final_data = merged_data.drop(columns=drop_columns).dropna()\
+\
+# Step 7: Exploratory Data Analysis (EDA)\
+sns.pairplot(final_data)\
+plt.show()\
+sns.heatmap(final_data.corr(), annot=True, cmap="coolwarm")\
+plt.show()\
+\
+# Step 8: Data Splitting & Scaling\
+X = final_data.drop(columns=['Risk_Allele_Present'])\
+y = final_data['Risk_Allele_Present']\
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\
+\
+# Handling Class Imbalance\
+class_weights = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)\
+class_weight_dict = \{i: class_weights[i] for i in range(len(class_weights))\}\
+smote = SMOTE(random_state=42)\
+X_train, y_train = smote.fit_resample(X_train, y_train)\
+\
+# Standardization\
+scaler = StandardScaler()\
+X_train_scaled = scaler.fit_transform(X_train)\
+X_test_scaled = scaler.transform(X_test)\
+\
+# Step 9: Model Training (Random Forest with Bayesian Optimization)\
+rf = RandomForestClassifier()\
+param_grid = \{'n_estimators': (50, 300), 'max_depth': (3, 15)\}\
+opt = BayesSearchCV(rf, param_grid, n_iter=5, cv=3, random_state=42)\
+logging.info("Starting Bayesian Optimization for Random Forest...")\
+opt.fit(X_train_scaled, y_train)\
+y_pred = opt.predict(X_test_scaled)\
+\
+# Step 10: Model Evaluation\
+logging.info(f"Random Forest Model Accuracy: \{accuracy_score(y_test, y_pred)\}")\
+logging.info("Confusion Matrix:")\
+logging.info(confusion_matrix(y_test, y_pred))\
+logging.info("Classification Report:")\
+logging.info(classification_report(y_test, y_pred))\
+\
+# Step 11: SHAP Feature Importance\
+explainer = shap.TreeExplainer(opt.best_estimator_)\
+shap_values = explainer.shap_values(X_test_scaled)\
+shap.summary_plot(shap_values, X_test)\
+\
+# Step 12: Deep Learning Model\
+model = Sequential([\
+    Dense(128, activation='relu', input_shape=(X_train_scaled.shape[1],)),\
+    BatchNormalization(),\
+    Dropout(0.3),\
+    Dense(64, activation='relu'),\
+    BatchNormalization(),\
+    Dropout(0.3),\
+    Dense(1, activation='sigmoid')\
+])\
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])\
+model.fit(X_train_scaled, y_train, epochs=20, batch_size=32, validation_data=(X_test_scaled, y_test))\
+\
+# Save processed data\
+final_data.to_csv("/mnt/data/preprocessed_data_master.csv", index=False)\
+logging.info("Master-level preprocessing complete. Data saved.")\
+}
