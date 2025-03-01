@@ -1,0 +1,18 @@
+User: mathan P
+Age: 21
+Weight: 82.0 kg
+Height: 1.74 m
+Waist: 40.0 cm
+Neck: 18.0 cm
+BMI: 27.08
+Body Fat Percentage: 21.13%
+Lean Body Mass: 64.67 kg
+BMR: 1807.50 kcal/day
+TDEE: 2801.62 kcal/day
+Waist-to-Height Ratio (WHtR): 0.23 (Low risk)
+Ideal Body Weight: 69.56 kg
+Metabolic Age: 25.30 years
+T-Score (Bone Density Prediction): 6.00
+Caloric Intake for Weight Loss: 2301.62 kcal/day
+Recommendations:
+Consider reducing calorie intake and increasing physical activity to lower BMI.
