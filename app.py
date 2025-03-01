@@ -12,7 +12,7 @@ def authenticate_google_sheets():
 
 def save_to_google_sheets(data):
     client = authenticate_google_sheets()
-    sheet = client.open("User_Health_Data").sheet1  # Change this to your sheet name
+    sheet = client.open("working_model_data").sheet1  
     sheet.append_row(data)
 
 def calculate_metrics(weight, height, age, waist, neck, gender, activity_level, bone_density):
